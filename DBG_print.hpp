@@ -3,7 +3,7 @@
 * @Author:   Ben Sokol <Ben>
 * @Email:    ben@bensokol.com
 * @Created:  September 30th, 2019 [8:17pm]
-* @Modified: October 1st, 2019 [2:40am]
+* @Modified: October 1st, 2019 [2:59am]
 * @Version:  1.0.0
 *
 * Copyright (C) 2019 by Ben Sokol. All Rights Reserved.
@@ -12,7 +12,6 @@
 #ifndef DBG_PRINT_HPP
 #define DBG_PRINT_HPP
 
-#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <fstream>
@@ -32,12 +31,6 @@ namespace DBG {
       }
 
       ~print() {
-        for (auto& e : mOS_to_delete) {
-          if (e) {
-            e->close();
-            delete e;
-          }
-        }
       }
 
       template <typename T>
@@ -110,11 +103,10 @@ namespace DBG {
       }
 
       bool open(std::string& filename, std::ios_base::openmode mode = std::ofstream::out | std::ofstream::app) {
-        std::ofstream* ofs = new std::ofstream(filename, mode);
-
-        if (ofs->is_open()) {
-          mOS.push_back(ofs);
-          mOS_to_delete.push_back(ofs);
+        std::shared_ptr<std::ofstream> ofs(new std::ofstream(filename, mode));
+        if (ofs.get()->is_open()) {
+          mOS.push_back(ofs.get());
+          mOS_unique_ptr.push_back(ofs);
           return true;
         }
 
@@ -138,7 +130,7 @@ namespace DBG {
       bool mFlush;
       bool mEndl;
       std::list<std::ostream*> mOS;
-      std::list<std::ofstream*> mOS_to_delete;
+      std::list<std::shared_ptr<std::ofstream>> mOS_unique_ptr;
     };
 
   }  // namespace INTERNAL
