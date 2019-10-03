@@ -3,7 +3,7 @@
 * @Author:   Ben Sokol <Ben>
 * @Email:    ben@bensokol.com
 * @Created:  October 2nd, 2019 [4:23pm]
-* @Modified: October 2nd, 2019 [10:01pm]
+* @Modified: October 3rd, 2019 [3:08pm]
 * @Version:  1.0.0
 *
 * Copyright (C) 2019 by Ben Sokol. All Rights Reserved.
@@ -23,6 +23,20 @@
 #include "DBG_out.hpp"
 
 #include "UTL_timeType.hpp"
+
+#if __has_include(<filesystem>)
+  #include <filesystem>
+  #ifndef std_filesystem
+    #define std_filesystem std::filesystem
+  #endif
+#elif __has_include(<experimental/filesystem>)
+  #include <experimental/filesystem>
+  #ifndef std_filesystem
+    #define std_filesystem std::experimental::filesystem
+  #endif
+#else
+  #error Requires std::filesystem or std::experimental::filesystem
+#endif
 
 namespace DBG {
   out::container::container(const std::string &_str,
@@ -75,13 +89,24 @@ namespace DBG {
   out::out() :
       mEnable(false),
       mEnableOS(true),
+      mEnableOFS(true),
       mDefaultTimestamp(true),
       mDefaultLocation(true),
       mFlush(true),
       mNewline(false),
       mStop(false),
       mMessages(std::queue<container *>()) {
-    // Initialize queue of messages
+    // Create logs folder
+    std_filesystem::path path = std_filesystem::current_path();
+    path += std_filesystem::path("/logs");
+    std_filesystem::create_directory(path);
+
+    // Set path to log file
+    path += std_filesystem::path(
+      "/Debug Log " + std::to_string(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())) + ".log");
+
+    // Open log file
+    mOFS.open(path.c_str(), std::ofstream::out | std::ofstream::app);
 
     // Start worker
     mWorker = std::thread(&out::outputThread, this);
@@ -144,6 +169,30 @@ namespace DBG {
   }
 
 
+  bool out::ofsEnabled() {
+    std::unique_lock<std::mutex> lock(mOSMutex);
+    return mEnableOFS && mOFS.is_open();
+  }
+
+
+  void out::ofsEnable(const bool &aEnable) {
+    std::unique_lock<std::mutex> lock(mOSMutex);
+    mEnableOFS = aEnable && mOFS.is_open();
+  }
+
+
+  void out::ofsDisable() {
+    std::unique_lock<std::mutex> lock(mOSMutex);
+    mEnableOFS = false;
+  }
+
+
+  std::string out::getLogFilename() {
+    mEnableOFS = false;
+    return mLogFilename;
+  }
+
+
   void out::flush(bool aFlush) {
     std::unique_lock<std::mutex> lock(mOSMutex);
     mFlush = aFlush;
@@ -153,25 +202,6 @@ namespace DBG {
   void out::newline(bool aNewline) {
     std::unique_lock<std::mutex> lock(mOSMutex);
     mNewline = aNewline;
-  }
-
-
-  bool out::openOFS(const std::string &filename, std::ios_base::openmode mode) {
-    std::unique_lock<std::mutex> lock(mOSMutex);
-    if (mOFS.is_open()) {
-      return false;
-    }
-
-    mOFS.open(filename, mode);
-    return mOFS.is_open();
-  }
-
-
-  void out::closeOFS() {
-    std::unique_lock<std::mutex> lock(mOSMutex);
-    if (mOFS.is_open()) {
-      mOFS.close();
-    }
   }
 
 
@@ -220,7 +250,7 @@ namespace DBG {
           }
         }
 
-        if (c->ofs && mOFS.is_open()) {
+        if (c->ofs && mEnableOFS && mOFS.is_open()) {
           mOFS << outputStr;
           if (mFlush) {
             mOFS << std::flush;
