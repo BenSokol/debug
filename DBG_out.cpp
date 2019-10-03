@@ -3,7 +3,7 @@
 * @Author:   Ben Sokol <Ben>
 * @Email:    ben@bensokol.com
 * @Created:  October 2nd, 2019 [4:23pm]
-* @Modified: October 3rd, 2019 [3:08pm]
+* @Modified: October 3rd, 2019 [4:47pm]
 * @Version:  1.0.0
 *
 * Copyright (C) 2019 by Ben Sokol. All Rights Reserved.
@@ -88,8 +88,8 @@ namespace DBG {
 
   out::out() :
       mEnable(false),
-      mEnableOS(true),
-      mEnableOFS(true),
+      mEnableOS(false),
+      mEnableOFS(false),
       mDefaultTimestamp(true),
       mDefaultLocation(true),
       mFlush(true),
