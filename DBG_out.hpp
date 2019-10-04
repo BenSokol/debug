@@ -3,7 +3,7 @@
  *@Author:   Ben Sokol <Ben>
  *@Email:    ben@bensokol.com
  *@Created:  September 30th, 2019 [8:17pm]
-* @Modified: October 3rd, 2019 [3:08pm]
+* @Modified: October 4th, 2019 [6:22pm]
  *@Version:  1.0.0
 *
  *Copyright (C) 2019 by Ben Sokol. All Rights Reserved.
@@ -36,11 +36,6 @@
 #endif
 
 #ifndef DBG_OUT_MACROS
-  #define DBG_print(...)  DBG::out::instance().print(DBG_OUT_current_location_get, __VA_ARGS__)
-  #define DBG_printf(...) DBG::out::instance().printf(DBG_OUT_current_location_get, __VA_ARGS__)
-  #define DBG_write(_printTimestamp, _printLocation, _os, _ofs, ...) \
-    DBG::out::instance().write(DBG_OUT_current_location_get, _printTimestamp, _printLocation, _os, _ofs, __VA_ARGS__)
-
   #ifdef std_source_location
     #define DBG_OUT_current_location_get       std_source_location::current()
     #define DBG_OUT_current_location_parameter const std_source_location &location
@@ -49,6 +44,17 @@
     #define DBG_OUT_current_location_get       __LINE__, __FILE__, __FUNCTION__
     #define DBG_OUT_current_location_parameter const int &line, const std::string &file, const std::string &function
     #define DBG_OUT_current_location_usage     line, file, function
+  #endif
+
+  #ifndef NDEBUG
+    #define DBG_print(...)  DBG::out::instance().print(DBG_OUT_current_location_get, __VA_ARGS__)
+    #define DBG_printf(...) DBG::out::instance().printf(DBG_OUT_current_location_get, __VA_ARGS__)
+    #define DBG_write(_printTimestamp, _printLocation, _os, _ofs, ...) \
+      DBG::out::instance().write(DBG_OUT_current_location_get, _printTimestamp, _printLocation, _os, _ofs, __VA_ARGS__)
+  #else
+    #define DBG_print(...)
+    #define DBG_printf(...)
+    #define DBG_write(_printTimestamp, _printLocation, _os, _ofs, ...)
   #endif
 #endif
 
@@ -68,6 +74,8 @@ namespace DBG {
     bool enabled();
     void enable(const bool &aEnable = true);
     void disable();
+
+    void shutdown();
 
     // Enable/Disable
     bool osEnabled();
@@ -97,15 +105,23 @@ namespace DBG {
     //   ofs       = true (if open)
     template <typename Arg, typename... Args>
     void print(DBG_OUT_current_location_parameter, Arg &&arg, Args &&... args) {
-      std::unique_lock<std::mutex> lock(mQueueMutex);
+      {
+        std::unique_lock<std::mutex> lock(mOSMutex);
+        if (mDisable) {
+          return;
+        }
+      }
 
       std::stringstream ss;
 
       ss << std::forward<Arg>(arg);
       ((ss << std::forward<Args>(args)), ...);
 
-      mMessages.push(
-        new container(ss.str(), mDefaultTimestamp, mDefaultLocation, true, true, DBG_OUT_current_location_usage));
+      {
+        std::unique_lock<std::mutex> lock(mQueueMutex);
+        mMessages.push(
+          new container(ss.str(), mDefaultTimestamp, mDefaultLocation, true, true, DBG_OUT_current_location_usage));
+      }
 
       mQueueUpdatedCondition.notify_one();
     }
@@ -117,14 +133,22 @@ namespace DBG {
     //   ofs       = true (if open)
     template <typename Arg, typename... Args>
     void printf(DBG_OUT_current_location_parameter, Arg &&arg, Args &&... args) {
-      std::unique_lock<std::mutex> lock1(mQueueMutex);
+      {
+        std::unique_lock<std::mutex> lock(mOSMutex);
+        if (mDisable) {
+          return;
+        }
+      }
 
       std::stringstream ss;
       ss << std::forward<Arg>(arg);
       ((ss << std::forward<Args>(args)), ...);
 
-      mMessages.push(
-        new container(ss.str(), mDefaultTimestamp, mDefaultLocation, false, true, DBG_OUT_current_location_usage));
+      {
+        std::unique_lock<std::mutex> lock1(mQueueMutex);
+        mMessages.push(
+          new container(ss.str(), mDefaultTimestamp, mDefaultLocation, false, true, DBG_OUT_current_location_usage));
+      }
 
       mQueueUpdatedCondition.notify_one();
     }
@@ -143,14 +167,22 @@ namespace DBG {
                const bool _ofs,
                Arg &&arg,
                Args &&... args) {
-      std::unique_lock<std::mutex> lock(mQueueMutex);
+      {
+        std::unique_lock<std::mutex> lock(mOSMutex);
+        if (mDisable) {
+          return;
+        }
+      }
 
       std::stringstream ss;
       ss << std::forward<Arg>(arg);
       ((ss << std::forward<Args>(args)), ...);
 
-      mMessages.push(
-        new container(ss.str(), _printTimestamp, _printLocation, _os, _ofs, DBG_OUT_current_location_usage));
+      {
+        std::unique_lock<std::mutex> lock(mQueueMutex);
+        mMessages.push(
+          new container(ss.str(), _printTimestamp, _printLocation, _os, _ofs, DBG_OUT_current_location_usage));
+      }
 
       mQueueUpdatedCondition.notify_one();
     }
@@ -191,6 +223,8 @@ namespace DBG {
     bool mEnable;
     bool mEnableOS;
     bool mEnableOFS;
+
+    bool mDisable;
 
     std::string mLogFilename;
 

@@ -3,7 +3,7 @@
 * @Author:   Ben Sokol <Ben>
 * @Email:    ben@bensokol.com
 * @Created:  October 2nd, 2019 [4:23pm]
-* @Modified: October 3rd, 2019 [4:47pm]
+* @Modified: October 4th, 2019 [2:38pm]
 * @Version:  1.0.0
 *
 * Copyright (C) 2019 by Ben Sokol. All Rights Reserved.
@@ -110,7 +110,7 @@ namespace DBG {
 
     // Start worker
     mWorker = std::thread(&out::outputThread, this);
-  }
+  }  // namespace DBG
 
 
   out::~out() {
@@ -120,7 +120,9 @@ namespace DBG {
     }
 
     mQueueUpdatedCondition.notify_one();
-    mWorker.join();
+    if (mWorker.joinable()) {
+      mWorker.join();
+    }
 
     while (!mMessages.empty()) {
       delete mMessages.front();
@@ -148,6 +150,30 @@ namespace DBG {
   void out::disable() {
     std::unique_lock<std::mutex> lock(mOSMutex);
     mEnable = false;
+  }
+
+
+  void out::shutdown() {
+    {
+      std::unique_lock<std::mutex> lock(mQueueMutex);
+      mStop = true;
+    }
+
+    mDisable = true;
+
+    mQueueUpdatedCondition.notify_one();
+    if (mWorker.joinable()) {
+      mWorker.join();
+    }
+
+    while (!mMessages.empty()) {
+      delete mMessages.front();
+      mMessages.pop();
+    }
+
+    if (mOFS.is_open()) {
+      mOFS.close();
+    }
   }
 
 
