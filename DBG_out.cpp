@@ -3,7 +3,7 @@
 * @Author:   Ben Sokol <Ben>
 * @Email:    ben@bensokol.com
 * @Created:  October 2nd, 2019 [4:23pm]
-* @Modified: October 4th, 2019 [2:38pm]
+* @Modified: October 8th, 2019 [5:04am]
 * @Version:  1.0.0
 *
 * Copyright (C) 2019 by Ben Sokol. All Rights Reserved.
@@ -260,7 +260,7 @@ namespace DBG {
         }
 
         if (c->printLocation == true) {
-          outputStr += c->file + ":" + c->function + ":" + std::to_string(c->line) + " - ";
+          outputStr += c->file + ":" + c->function + ":" + std::to_string(c->line) + "\t - ";
         }
 
         outputStr += c->str;
