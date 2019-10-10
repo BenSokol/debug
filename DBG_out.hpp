@@ -3,7 +3,7 @@
  *@Author:   Ben Sokol <Ben>
  *@Email:    ben@bensokol.com
  *@Created:  September 30th, 2019 [8:17pm]
-* @Modified: October 4th, 2019 [6:22pm]
+* @Modified: October 9th, 2019 [7:03pm]
  *@Version:  1.0.0
 *
  *Copyright (C) 2019 by Ben Sokol. All Rights Reserved.
@@ -12,6 +12,7 @@
 #ifndef DBG_OUT_HPP
 #define DBG_OUT_HPP
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <fstream>
@@ -47,14 +48,24 @@
   #endif
 
   #ifndef NDEBUG
-    #define DBG_print(...)  DBG::out::instance().print(DBG_OUT_current_location_get, __VA_ARGS__)
-    #define DBG_printf(...) DBG::out::instance().printf(DBG_OUT_current_location_get, __VA_ARGS__)
+    #define DBG_print(...)  DBG::out::instance().print(DBG_OUT_current_location_get, 0, __VA_ARGS__)
+    #define DBG_printf(...) DBG::out::instance().printf(DBG_OUT_current_location_get, 0, __VA_ARGS__)
     #define DBG_write(_printTimestamp, _printLocation, _os, _ofs, ...) \
-      DBG::out::instance().write(DBG_OUT_current_location_get, _printTimestamp, _printLocation, _os, _ofs, __VA_ARGS__)
+      DBG::out::instance().write(                                      \
+        DBG_OUT_current_location_get, _printTimestamp, _printLocation, _os, _ofs, 0, __VA_ARGS__)
+    #define DBG_printv(verbosity, ...) DBG::out::instance().print(DBG_OUT_current_location_get, verbosity, __VA_ARGS__)
+    #define DBG_printvf(verbosity, ...) \
+      DBG::out::instance().printf(DBG_OUT_current_location_get, verbosity, __VA_ARGS__)
+    #define DBG_writev(verbosity, _printTimestamp, _printLocation, _os, _ofs, ...) \
+      DBG::out::instance().write(                                                  \
+        DBG_OUT_current_location_get, _printTimestamp, _printLocation, _os, _ofs, verbosity, __VA_ARGS__)
   #else
     #define DBG_print(...)
     #define DBG_printf(...)
     #define DBG_write(_printTimestamp, _printLocation, _os, _ofs, ...)
+    #define DBG_printv(verbosity, ...)
+    #define DBG_printvf(verbosity, ...)
+    #define DBG_writev(verbosity, _printTimestamp, _printLocation, _os, _ofs, ...)
   #endif
 #endif
 
@@ -91,6 +102,9 @@ namespace DBG {
     void ofsEnable(const bool &aEnable = true);
     void ofsDisable();
 
+    uint8_t verbosity();
+    void verbosity(size_t aVerbosity);
+
     // Log file modification
     std::string getLogFilename();
 
@@ -104,12 +118,9 @@ namespace DBG {
     //   std::cerr = true
     //   ofs       = true (if open)
     template <typename Arg, typename... Args>
-    void print(DBG_OUT_current_location_parameter, Arg &&arg, Args &&... args) {
-      {
-        std::unique_lock<std::mutex> lock(mOSMutex);
-        if (mDisable) {
-          return;
-        }
+    void print(DBG_OUT_current_location_parameter, size_t verbosity, Arg &&arg, Args &&... args) {
+      if (mDisable) {
+        return;
       }
 
       std::stringstream ss;
@@ -119,8 +130,8 @@ namespace DBG {
 
       {
         std::unique_lock<std::mutex> lock(mQueueMutex);
-        mMessages.push(
-          new container(ss.str(), mDefaultTimestamp, mDefaultLocation, true, true, DBG_OUT_current_location_usage));
+        mMessages.push(new container(
+          ss.str(), mDefaultTimestamp, mDefaultLocation, true, true, DBG_OUT_current_location_usage, verbosity));
       }
 
       mQueueUpdatedCondition.notify_one();
@@ -132,12 +143,9 @@ namespace DBG {
     //   std::cerr = false (if ofs is not open)
     //   ofs       = true (if open)
     template <typename Arg, typename... Args>
-    void printf(DBG_OUT_current_location_parameter, Arg &&arg, Args &&... args) {
-      {
-        std::unique_lock<std::mutex> lock(mOSMutex);
-        if (mDisable) {
-          return;
-        }
+    void printf(DBG_OUT_current_location_parameter, size_t verbosity, Arg &&arg, Args &&... args) {
+      if (mDisable) {
+        return;
       }
 
       std::stringstream ss;
@@ -146,8 +154,8 @@ namespace DBG {
 
       {
         std::unique_lock<std::mutex> lock1(mQueueMutex);
-        mMessages.push(
-          new container(ss.str(), mDefaultTimestamp, mDefaultLocation, false, true, DBG_OUT_current_location_usage));
+        mMessages.push(new container(
+          ss.str(), mDefaultTimestamp, mDefaultLocation, false, true, DBG_OUT_current_location_usage, verbosity));
       }
 
       mQueueUpdatedCondition.notify_one();
@@ -165,13 +173,11 @@ namespace DBG {
                const bool _printLocation,
                const bool _os,
                const bool _ofs,
+               size_t verbosity,
                Arg &&arg,
                Args &&... args) {
-      {
-        std::unique_lock<std::mutex> lock(mOSMutex);
-        if (mDisable) {
-          return;
-        }
+      if (mDisable) {
+        return;
       }
 
       std::stringstream ss;
@@ -180,8 +186,8 @@ namespace DBG {
 
       {
         std::unique_lock<std::mutex> lock(mQueueMutex);
-        mMessages.push(
-          new container(ss.str(), _printTimestamp, _printLocation, _os, _ofs, DBG_OUT_current_location_usage));
+        mMessages.push(new container(
+          ss.str(), _printTimestamp, _printLocation, _os, _ofs, DBG_OUT_current_location_usage, verbosity));
       }
 
       mQueueUpdatedCondition.notify_one();
@@ -198,7 +204,8 @@ namespace DBG {
                 const bool &_ofs,
                 const int &_line,
                 const std::string &_file,
-                const std::string &_function);
+                const std::string &_function,
+                const size_t &_verbosity);
       container(const container &c);
       container(const container &&c);
       ~container();
@@ -212,6 +219,7 @@ namespace DBG {
       const int line;
       const std::string file;
       const std::string function;
+      const size_t verbosity;
     };
 
     // Thread used for printing
@@ -220,26 +228,27 @@ namespace DBG {
     // Returns timestamp as string
     std::string getTimestamp(std::chrono::system_clock::time_point time);
 
-    bool mEnable;
-    bool mEnableOS;
-    bool mEnableOFS;
+    std::atomic<bool> mEnable;
+    std::atomic<bool> mEnableOS;
+    std::atomic<bool> mEnableOFS;
 
-    bool mDisable;
+    std::atomic<bool> mDisable;
 
     std::string mLogFilename;
 
-    bool mDefaultTimestamp;
-    bool mDefaultLocation;
+    std::atomic<bool> mDefaultTimestamp;
+    std::atomic<bool> mDefaultLocation;
 
-    bool mFlush;
-    bool mNewline;
+    std::atomic<bool> mFlush;
+    std::atomic<bool> mNewline;
+
+    std::atomic<size_t> mVerbosity;
 
     std::ofstream mOFS;
 
     bool mStop;
     std::thread mWorker;
     std::queue<container *> mMessages;
-    std::mutex mOSMutex;
     std::mutex mQueueMutex;
     std::mutex mTaskFinishedMutex;
     std::condition_variable mQueueUpdatedCondition;

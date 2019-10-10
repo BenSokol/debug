@@ -3,7 +3,7 @@
 * @Author:   Ben Sokol <Ben>
 * @Email:    ben@bensokol.com
 * @Created:  October 2nd, 2019 [4:23pm]
-* @Modified: October 8th, 2019 [5:04am]
+* @Modified: October 9th, 2019 [7:04pm]
 * @Version:  1.0.0
 *
 * Copyright (C) 2019 by Ben Sokol. All Rights Reserved.
@@ -46,7 +46,8 @@ namespace DBG {
                             const bool &_ofs,
                             const int &_line,
                             const std::string &_file,
-                            const std::string &_function) :
+                            const std::string &_function,
+                            const size_t &_verbosity) :
       str(_str),
       printTimestamp(_printTimestamp),
       printLocation(_printLocation),
@@ -55,7 +56,8 @@ namespace DBG {
       time(std::chrono::system_clock::now()),
       line(_line),
       file(_file),
-      function(_function) {
+      function(_function),
+      verbosity(_verbosity) {
   }
 
   out::container::container(const out::container &c) :
@@ -67,7 +69,8 @@ namespace DBG {
       time(c.time),
       line(c.line),
       file(c.file),
-      function(c.function) {
+      function(c.function),
+      verbosity(c.verbosity) {
   }
 
   out::container::container(const out::container &&c) :
@@ -79,7 +82,8 @@ namespace DBG {
       time(std::move(c.time)),
       line(std::move(c.line)),
       file(std::move(c.file)),
-      function(std::move(c.function)) {
+      function(std::move(c.function)),
+      verbosity(std::move(c.verbosity)) {
   }
 
   out::container::~container() {
@@ -94,6 +98,7 @@ namespace DBG {
       mDefaultLocation(true),
       mFlush(true),
       mNewline(false),
+      mVerbosity(0),
       mStop(false),
       mMessages(std::queue<container *>()) {
     // Create logs folder
@@ -136,19 +141,16 @@ namespace DBG {
 
 
   bool out::enabled() {
-    std::unique_lock<std::mutex> lock(mOSMutex);
     return mEnable;
   }
 
 
   void out::enable(const bool &aEnable) {
-    std::unique_lock<std::mutex> lock(mOSMutex);
     mEnable = aEnable;
   }
 
 
   void out::disable() {
-    std::unique_lock<std::mutex> lock(mOSMutex);
     mEnable = false;
   }
 
@@ -178,38 +180,42 @@ namespace DBG {
 
 
   bool out::osEnabled() {
-    std::unique_lock<std::mutex> lock(mOSMutex);
     return mEnableOS;
   }
 
 
   void out::osEnable(const bool &aEnable) {
-    std::unique_lock<std::mutex> lock(mOSMutex);
     mEnableOS = aEnable;
   }
 
 
   void out::osDisable() {
-    std::unique_lock<std::mutex> lock(mOSMutex);
     mEnableOS = false;
   }
 
 
   bool out::ofsEnabled() {
-    std::unique_lock<std::mutex> lock(mOSMutex);
     return mEnableOFS && mOFS.is_open();
   }
 
 
   void out::ofsEnable(const bool &aEnable) {
-    std::unique_lock<std::mutex> lock(mOSMutex);
     mEnableOFS = aEnable && mOFS.is_open();
   }
 
 
   void out::ofsDisable() {
-    std::unique_lock<std::mutex> lock(mOSMutex);
     mEnableOFS = false;
+  }
+
+
+  uint8_t out::verbosity() {
+    return mVerbosity;
+  }
+
+
+  void out::verbosity(size_t aVerbosity) {
+    mVerbosity = aVerbosity;
   }
 
 
@@ -220,13 +226,11 @@ namespace DBG {
 
 
   void out::flush(bool aFlush) {
-    std::unique_lock<std::mutex> lock(mOSMutex);
     mFlush = aFlush;
   }
 
 
   void out::newline(bool aNewline) {
-    std::unique_lock<std::mutex> lock(mOSMutex);
     mNewline = aNewline;
   }
 
@@ -251,8 +255,7 @@ namespace DBG {
         }
       }
 
-      {
-        std::unique_lock<std::mutex> lock(mOSMutex);
+      if (mVerbosity >= c->verbosity) {
         std::string outputStr = "";
 
         if (c->printTimestamp == true) {
@@ -306,9 +309,7 @@ namespace DBG {
 
 
   size_t out::remainingMessages() {
-    std::lock(mOSMutex, mQueueMutex);
-    std::lock_guard<std::mutex> lock1(mOSMutex, std::adopt_lock);
-    std::lock_guard<std::mutex> lock2(mQueueMutex, std::adopt_lock);
+    std::unique_lock<std::mutex> lock(mQueueMutex);
     return mMessages.size();
   }
 
