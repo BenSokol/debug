@@ -1,52 +1,57 @@
 /**
- *@Filename: DBG_out.hpp
- *@Author:   Ben Sokol <Ben>
- *@Email:    ben@bensokol.com
- *@Created:  September 30th, 2019 [8:17pm]
-* @Modified: October 9th, 2019 [7:03pm]
- *@Version:  1.0.0
+* @Filename: DBG_out.hpp
+* @Author:   Ben Sokol <Ben>
+* @Email:    ben@bensokol.com
+* @Created:  October 19th, 2019 [3:41am]
+* @Modified: October 19th, 2019 [6:44pm]
+* @Version:  1.0.0
 *
- *Copyright (C) 2019 by Ben Sokol. All Rights Reserved.
+* Copyright (C) 2019 by Ben Sokol. All Rights Reserved.
 */
 
 #ifndef DBG_OUT_HPP
 #define DBG_OUT_HPP
 
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <fstream>
-#include <ios>
-#include <mutex>
-#include <queue>
-#include <sstream>
-#include <string>
-#include <thread>
-#include <utility>
+#include <cstdint>  // uint8_t
+
+#include <atomic>              // std::atomic
+#include <chrono>              // std::chrono::system_clock::time_point
+#include <condition_variable>  // std::condition_variable
+#include <fstream>             // std::ofstream
+#include <mutex>               // std::mutex, std::unique_lock
+#include <queue>               // std::queue
+#include <sstream>             // std::stringstream
+#include <string>              // std::string
+#include <thread>              // std::thread
+#include <utility>             // std::forward
 
 #if __has_include(<source_location>)
   #include <source_location>
-  #ifndef std_source_location
-    #define std_source_location std::source_location
+  #ifndef DBG_OUT_SOURCE_LOCATION_MACROS
+    #define DBG_OUT_SOURCE_LOCATION_MACROS
+    #define DBG_OUT_current_location_get       std::source_location::current()
+    #define DBG_OUT_current_location_parameter const std::source_location &location
+    #define DBG_OUT_current_location_usage     location.line(), location.file_name(), location.function_name()
   #endif
 #elif __has_include(<experimental/source_location>)
   #include <experimental/source_location>
-  #ifndef std_source_location
-    #define std_source_location std::experimental::source_location
+  #ifndef DBG_OUT_SOURCE_LOCATION_MACROS
+    #define DBG_OUT_SOURCE_LOCATION_MACROS
+    #define DBG_OUT_current_location_get       std::experimental::source_location::current()
+    #define DBG_OUT_current_location_parameter const std::experimental::source_location &location
+    #define DBG_OUT_current_location_usage     location.line(), location.file_name(), location.function_name()
   #endif
 #endif
 
-#ifndef DBG_OUT_MACROS
-  #ifdef std_source_location
-    #define DBG_OUT_current_location_get       std_source_location::current()
-    #define DBG_OUT_current_location_parameter const std_source_location &location
-    #define DBG_OUT_current_location_usage     location.line(), location.file_name(), location.function_name()
-  #else
-    #define DBG_OUT_current_location_get       __LINE__, __FILE__, __FUNCTION__
-    #define DBG_OUT_current_location_parameter const int &line, const std::string &file, const std::string &function
-    #define DBG_OUT_current_location_usage     line, file, function
-  #endif
+#ifndef DBG_OUT_SOURCE_LOCATION_MACROS
+  #define DBG_OUT_SOURCE_LOCATION_MACROS
+  #define DBG_OUT_current_location_get       __LINE__, __FILE__, __FUNCTION__
+  #define DBG_OUT_current_location_parameter const int &line, const std::string &file, const std::string &function
+  #define DBG_OUT_current_location_usage     line, file, function
+#endif
 
+#ifndef DBG_OUT_PRINT_MACROS
+  #define DBG_OUT_PRINT_MACROS
   #ifndef NDEBUG
     #define DBG_print(...)  DBG::out::instance().print(DBG_OUT_current_location_get, 0, __VA_ARGS__)
     #define DBG_printf(...) DBG::out::instance().printf(DBG_OUT_current_location_get, 0, __VA_ARGS__)
@@ -103,7 +108,7 @@ namespace DBG {
     void ofsDisable();
 
     uint8_t verbosity();
-    void verbosity(size_t aVerbosity);
+    void verbosity(uint8_t aVerbosity);
 
     // Log file modification
     std::string getLogFilename();
@@ -242,7 +247,7 @@ namespace DBG {
     std::atomic<bool> mFlush;
     std::atomic<bool> mNewline;
 
-    std::atomic<size_t> mVerbosity;
+    std::atomic<uint8_t> mVerbosity;
 
     std::ofstream mOFS;
 

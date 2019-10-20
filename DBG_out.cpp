@@ -3,22 +3,23 @@
 * @Author:   Ben Sokol <Ben>
 * @Email:    ben@bensokol.com
 * @Created:  October 2nd, 2019 [4:23pm]
-* @Modified: October 9th, 2019 [7:04pm]
+* @Modified: October 19th, 2019 [6:50pm]
 * @Version:  1.0.0
 *
 * Copyright (C) 2019 by Ben Sokol. All Rights Reserved.
 */
 
-#include <ctime>
+#include <cstdint>  // uint8_t
+#include <ctime>    // time_t, strftime
 
-#include <chrono>
-#include <condition_variable>
-#include <fstream>
-#include <iostream>
-#include <mutex>
-#include <queue>
-#include <string>
-#include <thread>
+#include <chrono>              // std::chrono::system_clock
+#include <condition_variable>  // std::condition_variable
+#include <fstream>             // std::ofstream
+#include <iostream>            // std::cerr
+#include <mutex>               // std::mutex, std::unique_lock
+#include <queue>               // std::queue
+#include <string>              // std::string
+#include <thread>              // std::thread
 
 #include "DBG_out.hpp"
 
@@ -163,7 +164,7 @@ namespace DBG {
 
     mDisable = true;
 
-    mQueueUpdatedCondition.notify_one();
+    mQueueUpdatedCondition.notify_all();
     if (mWorker.joinable()) {
       mWorker.join();
     }
@@ -214,7 +215,7 @@ namespace DBG {
   }
 
 
-  void out::verbosity(size_t aVerbosity) {
+  void out::verbosity(uint8_t aVerbosity) {
     mVerbosity = aVerbosity;
   }
 
@@ -316,7 +317,7 @@ namespace DBG {
 
   std::string out::getTimestamp(std::chrono::system_clock::time_point time) {
     UTL::timeType<size_t> time_type(UTL::timeType<size_t>::TIME_ZONE::LOCAL, time);
-    auto rawtime = std::chrono::system_clock::to_time_t(time);
+    time_t rawtime = std::chrono::system_clock::to_time_t(time);
     auto timeinfo = localtime(&rawtime);
     char buffer[80];
     strftime(buffer, 80, "%h %d, %Y", timeinfo);
